@@ -4,7 +4,7 @@ This release package contains the final CoLD implementation and the commuting-fl
 
 ## Framework
 
-[View the CoLD framework (PDF)](figures/framework.pdf)
+![CoLD framework](figures/framework.png)
 
 ## Repository layout
 
@@ -21,7 +21,7 @@ CoLD_release_package_20261022/
 ├── models/
 │   ├── CoRD_release/             # Final model, data loading, training, and metrics
 │   └── CoRD_research/            # Final command-line runner and analysis utilities
-├── figures/                      # Framework figure in PDF format
+├── figures/                      # Framework figure in PNG format
 ├── outputs/                      # New checkpoints, logs, and predictions are written here
 └── requirements.txt
 ```
