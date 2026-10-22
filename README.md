@@ -2,6 +2,10 @@
 
 This release package contains the final CoLD implementation and the commuting-flow datasets used in the experiments.
 
+## Framework
+
+[View the CoLD framework (PDF)](figures/framework.pdf)
+
 ## Repository layout
 
 ```text
@@ -17,7 +21,7 @@ CoLD_release_package_20261022/
 ├── models/
 │   ├── CoRD_release/             # Final model, data loading, training, and metrics
 │   └── CoRD_research/            # Final command-line runner and analysis utilities
-├── figures/                      # Empty folder for framework figures
+├── figures/                      # Framework figure in PDF format
 ├── outputs/                      # New checkpoints, logs, and predictions are written here
 └── requirements.txt
 ```
@@ -62,8 +66,3 @@ python -m models.CoRD_research.run \
 
 The runner selects the checkpoint with the lowest validation MSE. Each output directory contains `best.pt`, `summary.json`, `history.json`, `test_predictions.csv`, and `embeddings.npz` (unless disabled).
 
-## Final default settings
-
-The runner defaults to a 60-dimensional role representation, dynamic gate initialization of 0.2, Adam learning rate `1e-3`, weight decay `1e-5`, batch size 16, maximum 120 epochs, patience 40, `lambda_aux=1`, `lambda_con=2`, `lambda_orth=0.5`, temperature 0.5, and OD-similarity-weighted negative samples.
-
-The fixed splits assign 70% of regions to training, 10% to validation, and 20% to testing. Collaborative OD profiles and auxiliary targets are built only from train-to-train OD flows; validation/test-region flows do not enter collaborative encoding during training.
