@@ -9,7 +9,7 @@ This release package contains the final CoLD implementation and the commuting-fl
 ## Repository layout
 
 ```text
-CoLD_release_package_20261022/
+CoLD/
 ├── data/                         # Input data for the three cities
 │   ├── NYCNTA/                   # 262 regions
 │   ├── SF/                       # 242 regions
@@ -19,14 +19,18 @@ CoLD_release_package_20261022/
 │       └── od.npy                # OD flow matrix, shape [N, N]
 ├── splits/                       # Fixed 7:1:2 train/validation/test region splits
 ├── models/
-│   ├── CoRD_release/             # Final model, data loading, training, and metrics
-│   └── CoRD_research/            # Final command-line runner and analysis utilities
+│   ├── data.py                   # Data loading and region splits
+│   ├── metrics.py                # Evaluation metrics
+│   ├── model.py                  # CoLD model architecture
+│   └── train.py                  # Training and evaluation entry point
 ├── figures/                      # Framework figure in PNG format
+│   └── framework.png
 ├── outputs/                      # New checkpoints, logs, and predictions are written here
+├── README.md
 └── requirements.txt
 ```
 
-`CoRD_release` is the final CoLD model implementation. It uses attribute-based attractive/emissive role encoders, geographic role-neighbor aggregation with a dynamic self-residual gate, separate inflow/outflow collaborative teachers, StopGrad contrastive distillation, role orthogonality regularization, and a row-column collaborative auxiliary predictor.
+`models/model.py` contains the final CoLD model implementation. It uses attribute-based attractive/emissive role encoders, geographic role-neighbor aggregation with a dynamic self-residual gate, separate inflow/outflow collaborative teachers, StopGrad contrastive distillation, role orthogonality regularization, and a row-column collaborative auxiliary predictor.
 
 ## Installation
 
@@ -43,7 +47,7 @@ For GPU training, install a PyTorch build compatible with the local CUDA driver 
 Run commands from the package root. The example below trains on NYC with the released fixed split and writes all artifacts to `outputs/`.
 
 ```bash
-python -m models.CoRD_research.run \
+python -m models.train \
   --city-path data/NYCNTA \
   --split-path splits/NYCNTA_fixed_split.npz \
   --output-dir outputs/NYCNTA_seed0 \
@@ -55,7 +59,7 @@ python -m models.CoRD_research.run \
 For SF and DC, replace `NYCNTA` with `SF` or `DC`, and use `--neighbor-k 30`:
 
 ```bash
-python -m models.CoRD_research.run \
+python -m models.train \
   --city-path data/SF \
   --split-path splits/SF_fixed_split.npz \
   --output-dir outputs/SF_seed0 \
@@ -64,5 +68,5 @@ python -m models.CoRD_research.run \
   --neighbor-k 30
 ```
 
-The runner selects the checkpoint with the lowest validation MSE. Each output directory contains `best.pt`, `summary.json`, `history.json`, `test_predictions.csv`, and `embeddings.npz` (unless disabled).
+The runner selects the checkpoint with the lowest validation MSE. Each output directory contains `best.pt`, `summary.json`, `history.json`, and `test_predictions.csv`.
 
