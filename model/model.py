@@ -36,9 +36,9 @@ class ModelConfig:
 class SelfAttentionAggregator(nn.Module):
     def __init__(self, embed_dim):
         super().__init__()
-        self.q_proj = nn.Linear(embed_dim, embed_dim)
-        self.k_proj = nn.Linear(embed_dim, embed_dim)
-        self.v_proj = nn.Linear(embed_dim, embed_dim)
+        self.q_proj = nn.Linear(embed_dim, embed_dim, bias=False)
+        self.k_proj = nn.Linear(embed_dim, embed_dim, bias=False)
+        self.v_proj = nn.Linear(embed_dim, embed_dim, bias=False)
 
     def forward(self, target, neighbors):
         query = self.q_proj(target).unsqueeze(1)
@@ -98,8 +98,8 @@ class SpatialAttentionModel(nn.Module):
             return None, None
         if self.config.gate_mode == "scalar":
             return torch.sigmoid(self.in_residual_gate_logit), torch.sigmoid(self.out_residual_gate_logit)
-        attractive_pair = torch.cat([attractive, neighbors_in], dim=-1)
-        emissive_pair = torch.cat([emissive, neighbors_out], dim=-1)
+        attractive_pair = torch.cat([neighbors_in, attractive], dim=-1)
+        emissive_pair = torch.cat([neighbors_out, emissive], dim=-1)
         return (
             torch.sigmoid(F.linear(attractive_pair, self.in_vector_gate_weight) + self.in_residual_gate_logit),
             torch.sigmoid(F.linear(emissive_pair, self.out_vector_gate_weight) + self.out_residual_gate_logit),
@@ -148,18 +148,13 @@ class MainPredictor(nn.Module):
             nn.Linear(hidden_dim, hidden_dim), nn.ReLU(),
             nn.Linear(hidden_dim, 1),
         )
+        # Start inside ReLU's active region, independently of raw feature scale.
+        # This changes initialization only, not the predictor or its loss.
+        nn.init.zeros_(self.relation_mlp[-1].weight)
+        nn.init.ones_(self.relation_mlp[-1].bias)
 
     def forward(self, pair):
-        return self.relation_mlp(pair).reshape(-1)
-
-
-class LinearScaleLayer(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.log_scale = nn.Parameter(torch.tensor(0.0))
-
-    def forward(self, scores):
-        return torch.exp(self.log_scale) * scores
+        return F.relu(self.relation_mlp(pair)).reshape(-1)
 
 
 class ODJointMLP(nn.Module):
@@ -171,9 +166,11 @@ class ODJointMLP(nn.Module):
             nn.Linear(hidden_dim, hidden_dim), nn.ReLU(),
             nn.Linear(hidden_dim, 1),
         )
+        nn.init.zeros_(self.mlp[-1].weight)
+        nn.init.ones_(self.mlp[-1].bias)
 
     def forward(self, pair):
-        return self.mlp(pair).reshape(-1)
+        return F.relu(self.mlp(pair)).reshape(-1)
 
 
 class ODFeatureMLP(nn.Module):
@@ -188,14 +185,13 @@ class ODFeatureMLP(nn.Module):
         return self.mlp(profile)
 
 
-class CoRD(nn.Module):
+class CoLD(nn.Module):
     def __init__(self, feature_dim, train_regions, config: ModelConfig):
         super().__init__()
         self.config = config
         dim = config.embed_dim
         self.region_encoder = SpatialAttentionModel(feature_dim, config)
         self.main_predictor = MainPredictor(self.region_encoder.output_dim * 2 + 1)
-        self.flow_scale = LinearScaleLayer()
         aux_dim = dim * (4 if config.aux_mode == "both_roles" else 2) + 1
         self.aux_predictor = ODJointMLP(aux_dim, dim)
         self.inflow_encoder = ODFeatureMLP(train_regions, dim)
@@ -204,12 +200,12 @@ class CoRD(nn.Module):
         self.emissive_projector = nn.Linear(dim, dim) if config.use_projector else nn.Identity()
 
     def predict_main(self, origin, destination, distance):
-        pair = torch.cat([origin, destination, distance], dim=-1)
-        return self.flow_scale(self.main_predictor(pair))
+        pair = torch.cat([origin, distance, destination], dim=-1)
+        return self.main_predictor(pair)
 
     def predict_aux(self, out_origin, in_origin, out_destination, in_destination, distance):
         if self.config.aux_mode == "both_roles":
-            pair = torch.cat([out_origin, in_origin, out_destination, in_destination, distance], dim=-1)
+            pair = torch.cat([in_origin, out_origin, distance, in_destination, out_destination], dim=-1)
         else:
-            pair = torch.cat([out_origin, in_destination, distance], dim=-1)
+            pair = torch.cat([out_origin, distance, in_destination], dim=-1)
         return self.aux_predictor(pair)

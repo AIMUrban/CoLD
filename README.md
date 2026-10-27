@@ -1,72 +1,69 @@
-# CoLD: Commuting OD Flow Prediction
+# CoLD
 
-This release package contains the final CoLD implementation and the commuting-flow datasets used in the experiments.
+Collaborative Knowledge Distillation for Cold-Start Commuting Flow Prediction.
 
-## Framework
+![CoLD framework](figure/framework.png)
 
-![CoLD framework](figures/framework.png)
-
-## Repository layout
+## Files
 
 ```text
-CoLD/
-├── data/                         # Input data for the three cities
-│   ├── NYCNTA/                   # 262 regions
-│   ├── SF/                       # 242 regions
-│   └── DC/                       # 206 regions
-│       ├── attr.npy              # Regional attributes, shape [N, 48]
-│       ├── dis.npy               # Pairwise geographic distances, shape [N, N]
-│       └── od.npy                # OD flow matrix, shape [N, N]
-├── splits/                       # Fixed 7:1:2 train/validation/test region splits
-├── models/
-│   ├── data.py                   # Data loading and region splits
-│   ├── metrics.py                # Evaluation metrics
-│   ├── model.py                  # CoLD model architecture
-│   └── train.py                  # Training and evaluation entry point
-├── figures/                      # Framework figure in PNG format
-│   └── framework.png
-├── outputs/                      # New checkpoints, logs, and predictions are written here
+CoLD_minimal/
+├── data/
+│   ├── NYCNTA/           # NYC: 262 regions
+│   ├── SF/               # 242 regions
+│   └── DC/               # 206 regions
+├── figure/
+│   ├── framework.png
+│   └── framework.pdf
+├── model/
+│   ├── __init__.py
+│   ├── data.py           # Region splits, OD profiles and neighbors
+│   ├── model.py          # Encoders and predictors
+│   ├── train.py          # Single-fold training
+│   ├── cross_validate.py # Five-fold training and aggregation
+│   └── metrics.py
 ├── README.md
 └── requirements.txt
 ```
 
-`models/model.py` contains the final CoLD model implementation. It uses attribute-based attractive/emissive role encoders, geographic role-neighbor aggregation with a dynamic self-residual gate, separate inflow/outflow collaborative teachers, StopGrad contrastive distillation, role orthogonality regularization, and a row-column collaborative auxiliary predictor.
+Each city contains `attr.npy` (N × 48), `dis.npy` (N × N), and `od.npy` (N × N).
 
-## Installation
+## Install
 
-Use Python 3.9+ and install the minimal dependencies:
+Use Python 3.10+ and run from this folder:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-For GPU training, install a PyTorch build compatible with the local CUDA driver before running the commands below.
+## Train
 
-## Run the final model
-
-Run commands from the package root. The example below trains on NYC with the released fixed split and writes all artifacts to `outputs/`.
+Run five-fold cross-validation on all three cities:
 
 ```bash
-python -m models.train \
-  --city-path data/NYCNTA \
-  --split-path splits/NYCNTA_fixed_split.npz \
-  --output-dir outputs/NYCNTA_seed0 \
-  --seed 0 \
-  --device cuda:0 \
-  --neighbor-k 20
+python -m model.cross_validate --cities NYCNTA SF DC --output-dir ../CoLD_runs --device cuda:0
 ```
 
-For SF and DC, replace `NYCNTA` with `SF` or `DC`, and use `--neighbor-k 30`:
+Use `--device cpu` or `--device mps` when CUDA is unavailable. To train one fold:
 
 ```bash
-python -m models.train \
-  --city-path data/SF \
-  --split-path splits/SF_fixed_split.npz \
-  --output-dir outputs/SF_seed0 \
-  --seed 0 \
-  --device cuda:0 \
-  --neighbor-k 30
+python -m model.train --city-path data/NYCNTA --fold 0 --seed 0 --neighbor-k 20 --output-dir ../CoLD_nyc_fold0 --device cpu
 ```
 
-The runner selects the checkpoint with the lowest validation MSE. Each output directory contains `best.pt`, `summary.json`, `history.json`, and `test_predictions.csv`.
+Five disjoint test folds are generated automatically with split seed 0. Each
+region is tested once; the remaining regions are divided into train/validation
+sets at 7:1. Training seed for fold f is f by default. Training uses only
+train-to-train flows, and neighbors come only from training regions. Testing
+uses train-to-test, test-to-train and test-to-test pairs, excluding self pairs.
 
+Defaults: d=60, temperature=0.5, Adam learning rate 1e-3, weight decay 1e-5,
+lambda_con=2, lambda_orth=0.5, validation-MSE patience 20 and maximum 300 epochs.
+Batch size 8 means eight origin rows, each with all other training destinations.
+The cross-validation runner uses K=20 for NYC and K=30 for SF/DC. Profiles use
+log1p; prediction targets remain on the original flow scale. Both predictors
+use ReLU outputs; their final linear weights start at zero and biases at one.
+
+The output directory stores checkpoints, logs, exact splits, test predictions,
+and metrics. Cross-validation reports the arithmetic mean and sample standard
+deviation of the five fold metrics. These runs generate new measured results;
+they are not guaranteed to reproduce the manuscript's original table values.
